@@ -228,9 +228,11 @@ func New(ctx context.Context, params backend.Params) (*DynamoDBBackend, error) {
 	}
 	sess.Config.HTTPClient = httpClient
 
+	awsCfg := aws.NewConfig().WithLogLevel(aws.LogDebugWithHTTPBody)
+	l.WithField("config", awsCfg).Info("starting dynamodb/streams with config")
 	// create DynamoDB service:
-	b.svc = dynamodb.New(sess)
-	b.streams = dynamodbstreams.New(sess)
+	b.svc = dynamodb.New(sess, awsCfg)
+	b.streams = dynamodbstreams.New(sess, awsCfg)
 
 	// check if the table exists?
 	ts, err := b.getTableStatus(ctx, b.Tablename)

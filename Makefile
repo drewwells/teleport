@@ -317,6 +317,7 @@ install: build
 
 .PHONY: image
 image:
+	$(MAKE) -C build.assets build
 	cp ./build.assets/charts/Dockerfile $(BUILDDIR)/
 	cd $(BUILDDIR) && docker build --no-cache . -t quay.io/gravitational/teleport:$(VERSION)
 	if [ -f e/Makefile ]; then $(MAKE) -C e image; fi
@@ -369,4 +370,3 @@ deb:
 	chmod +x $(BUILDDIR)/build-package.sh
 	cd $(BUILDDIR) && ./build-package.sh -t oss -v $(VERSION) -p deb -a $(ARCH) $(RUNTIME_SECTION) $(TARBALL_PATH_SECTION)
 	if [ -f e/Makefile ]; then $(MAKE) -C e deb; fi
-

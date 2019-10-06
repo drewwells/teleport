@@ -18,6 +18,7 @@ package backend
 
 import (
 	"context"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -34,7 +35,10 @@ func AcquireLock(ctx context.Context, backend Backend, lockName string, ttl time
 	key := []byte(filepath.Join(locksPrefix, lockName))
 	for {
 		// Get will clear TTL on a lock
-		backend.Get(ctx, key)
+		_, err := backend.Get(ctx, key)
+		if err != nil {
+			log.Printf("failed to get lock %s: %s", string(key), trace.DebugReport(err))
+		}
 
 		// CreateVal is atomic:
 		_, err = backend.Create(ctx, Item{Key: key, Value: []byte{1}, Expires: backend.Clock().Now().UTC().Add(ttl)})
@@ -42,6 +46,7 @@ func AcquireLock(ctx context.Context, backend Backend, lockName string, ttl time
 			break // success
 		}
 		if trace.IsAlreadyExists(err) { // locked? wait and repeat:
+			log.Printf("failed to create lock %s: %s", string(key), trace.DebugReport(err))
 			backend.Clock().Sleep(250 * time.Millisecond)
 			continue
 		}

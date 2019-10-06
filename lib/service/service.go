@@ -634,6 +634,7 @@ func NewTeleport(cfg *Config) (*TeleportProcess, error) {
 	process.RegisterEventMapping(eventMapping)
 
 	if cfg.Auth.Enabled {
+		process.Info("startup auth")
 		if err := process.initAuthService(); err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -643,6 +644,7 @@ func NewTeleport(cfg *Config) (*TeleportProcess, error) {
 	}
 
 	if cfg.SSH.Enabled {
+		process.Info("startup ssh")
 		if err := process.initSSH(); err != nil {
 			return nil, err
 		}
@@ -652,6 +654,7 @@ func NewTeleport(cfg *Config) (*TeleportProcess, error) {
 	}
 
 	if cfg.Proxy.Enabled {
+		process.Info("startup proxy")
 		eventMapping.In = append(eventMapping.In, ProxySSHReady)
 		if err := process.initProxy(); err != nil {
 			return nil, err
@@ -876,7 +879,7 @@ func (process *TeleportProcess) initAuthService() error {
 	var err error
 
 	cfg := process.Config
-
+	process.Infof("initialize Auth Service: %#v", cfg)
 	// Initialize the storage back-ends for keys, events and records
 	b, err := process.initAuthStorage()
 	if err != nil {
@@ -895,6 +898,7 @@ func (process *TeleportProcess) initAuthService() error {
 			"or save and playback recorded sessions."
 		process.Warn(warningMessage)
 	} else {
+		process.Info("setup audit")
 		// check if session recording has been disabled. note, we will continue
 		// logging audit events, we just won't record sessions.
 		recordSessions := true
@@ -906,7 +910,9 @@ func (process *TeleportProcess) initAuthService() error {
 			process.Warn(warningMessage)
 		}
 
+		process.Info("setup audit config")
 		auditConfig := cfg.Auth.ClusterConfig.GetAuditConfig()
+		process.Info("upload audit config to uploadHandler")
 		uploadHandler, err := initUploadHandler(auditConfig)
 		if err != nil {
 			if !trace.IsNotFound(err) {
@@ -914,6 +920,7 @@ func (process *TeleportProcess) initAuthService() error {
 			}
 		}
 
+		process.Info("upload audit config to external log")
 		externalLog, err := initExternalLog(auditConfig)
 		if err != nil {
 			if !trace.IsNotFound(err) {
@@ -921,6 +928,7 @@ func (process *TeleportProcess) initAuthService() error {
 			}
 		}
 
+		process.Info("upload audit config to external log")
 		auditServiceConfig := events.AuditLogConfig{
 			Context:        process.ExitContext(),
 			DataDir:        filepath.Join(cfg.DataDir, teleport.LogsDir),
@@ -939,6 +947,7 @@ func (process *TeleportProcess) initAuthService() error {
 		}
 	}
 
+	process.Info("create authserver")
 	// first, create the AuthServer
 	authServer, err := auth.Init(auth.InitConfig{
 		Backend:              b,
@@ -966,12 +975,14 @@ func (process *TeleportProcess) initAuthService() error {
 		AuditLog:             process.auditLog,
 		CipherSuites:         cfg.CipherSuites,
 	})
+	process.Info("auth server created")
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	process.setLocalAuth(authServer)
 
+	process.Info("connect to auth service")
 	connector, err := process.connectToAuthService(teleport.RoleAdmin)
 	if err != nil {
 		return trace.Wrap(err)
@@ -980,6 +991,7 @@ func (process *TeleportProcess) initAuthService() error {
 	// second, create the API Server: it's actually a collection of API servers,
 	// each serving requests for a "role" which is assigned to every connected
 	// client based on their certificate (user, server, admin, etc)
+	process.Info("create session service")
 	sessionService, err := session.New(b)
 	if err != nil {
 		return trace.Wrap(err)
@@ -2265,11 +2277,13 @@ func (process *TeleportProcess) initAuthStorage() (bk backend.Backend, err error
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	process.Info("start reporter")
 	reporter, err := backend.NewReporter(backend.ReporterConfig{
 		Component:        teleport.ComponentBackend,
 		Backend:          backend.NewSanitizer(bk),
 		TrackTopRequests: process.Config.Debug,
 	})
+	process.Infof("reporter started: %s", err)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
